@@ -1,0 +1,140 @@
+#!/bin/bash
+
+# Array of firmware components from oplus_archive
+oplus_files=(
+    "abl.img"
+    "aop.img"
+    "bluetooth.img"
+    "cpucp.img"
+    "devcfg.img"
+    "dsp.img"
+    "engineering_cdt.img"
+    "featenabler.img"
+    "hyp.img"
+    "imagefv.img"
+    "keymaster.img"
+    "modem.img"
+    "multiimgoem.img"
+    "oplus_sec.img"
+    "oplusstanvbk.img"
+    "qupfw.img"
+    "qweslicstore.img"
+    "shrm.img"
+    "splash.img"
+    "tz.img"
+    "uefisecapp.img"
+    "xbl_config.img"
+    "xbl.img"
+)
+
+# Array of firmware components from the LineageOS mirror
+lineage_files=(
+    "boot.img"
+    "dtbo.img"
+    "super_empty.img"
+    "vbmeta.img"
+    "vendor_boot.img"
+)
+
+# Base URLs
+oplus_base_url="https://github.com/luk1337/oplus_archive/releases/download/LE2125_14.0.0.730(EX01)/"
+lineage_base_url="https://mirrorbits.lineageos.org/full/lemonadep/20250210/"
+
+# Function to download and extract .zst files, skip if already exists
+download_and_extract() {
+    local file=$1
+    local base_url=$2
+    local url="${base_url}${file}.zst"
+    local temp_file="${file}.zst.inprogress"  # Temporary file while downloading
+
+    # Check if the .img file already exists
+    if [ -f "$file" ]; then
+        echo "$file already exists, skipping download and extraction."
+    else
+        # Download the compressed file with a temporary name
+        echo "Downloading ${url}..."
+        wget -q --show-progress -O "$temp_file" "$url"
+
+        # Check if the file was downloaded successfully
+        if [ -f "$temp_file" ]; then
+            # Extract the downloaded file
+            echo "Extracting ${temp_file}..."
+            zstd -d "$temp_file" -o "$file"
+
+            # Remove the temporary .zst file after extraction
+            rm "$temp_file"
+        else
+            echo "Failed to download ${url}. Skipping extraction."
+        fi
+    fi
+}
+
+# Download and extract oplus_archive files
+for file in "${oplus_files[@]}"; do
+    download_and_extract "$file" "$oplus_base_url"
+done
+
+# Download the LineageOS files directly (no .zst compression), skip if already exists
+for file in "${lineage_files[@]}"; do
+    if [ -f "$file" ]; then
+        echo "$file already exists, skipping download."
+    else
+        temp_file="${file}.inprogress"  # Temporary file while downloading
+        url="${lineage_base_url}${file}"
+        echo "Downloading ${url}..."
+        wget -q --show-progress -O "$temp_file" "$url"
+
+        # Check if the file was downloaded successfully
+        if [ -f "$temp_file" ]; then
+            # Rename the temp file to the final name
+            mv "$temp_file" "$file"
+        else
+            echo "Failed to download ${url}. Skipping."
+        fi
+    fi
+done
+
+# Reboot to fastboot mode
+echo "Rebooting to fastboot mode..."
+adb reboot fastboot
+
+# Wait for the device to enter fastboot mode
+sleep 15
+
+# Flash the necessary partitions using fastboot
+echo "Flashing boot-related images..."
+fastboot flash --slot=all dtbo dtbo.img
+fastboot flash --slot=all vbmeta vbmeta.img
+fastboot flash --slot=all vendor_boot vendor_boot.img
+fastboot flash --slot=all boot boot.img
+
+echo "Flashing other firmware images..."
+fastboot flash --slot=all abl abl.img
+fastboot flash --slot=all aop aop.img
+fastboot flash --slot=all bluetooth bluetooth.img
+fastboot flash --slot=all cpucp cpucp.img
+fastboot flash --slot=all devcfg devcfg.img
+fastboot flash --slot=all dsp dsp.img
+fastboot flash --slot=all engineering_cdt engineering_cdt.img
+fastboot flash --slot=all featenabler featenabler.img
+fastboot flash --slot=all hyp hyp.img
+fastboot flash --slot=all imagefv imagefv.img
+fastboot flash --slot=all keymaster keymaster.img
+fastboot flash --slot=all modem modem.img
+fastboot flash --slot=all multiimgoem multiimgoem.img
+fastboot flash --slot=all oplus_sec oplus_sec.img
+fastboot flash --slot=all oplusstanvbk oplusstanvbk.img
+fastboot flash --slot=all qupfw qupfw.img
+fastboot flash --slot=all qweslicstore qweslicstore.img
+fastboot flash --slot=all shrm shrm.img
+fastboot flash --slot=all splash splash.img
+fastboot flash --slot=all tz tz.img
+fastboot flash --slot=all uefisecapp uefisecapp.img
+fastboot flash --slot=all xbl_config xbl_config.img
+fastboot flash --slot=all xbl xbl.img
+
+# Reboot to recovery
+echo "Rebooting to recovery mode..."
+fastboot reboot recovery
+
+echo "Firmware download, flashing, and rebooting complete."
